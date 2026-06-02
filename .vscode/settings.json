@@ -1,0 +1,106 @@
+{
+  "[json]": {
+    "editor.quickSuggestions": {
+      "strings": true
+    },
+    "editor.suggest.insertMode": "replace",
+    "gitlens.codeLens.scopes": ["document"],
+    "editor.defaultFormatter": "vscode.json-language-features"
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "vscode.json-language-features"
+  },
+  "[markdown]": {
+    "editor.defaultFormatter": "yzhang.markdown-all-in-one"
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "[yaml]": {
+    "editor.autoIndent": "advanced",
+    "editor.insertSpaces": true,
+    "editor.tabSize": 2,
+    "editor.quickSuggestions": {
+      "comments": "on",
+      "other": "on",
+      "strings": "on"
+    },
+    "gitlens.codeLens.scopes": ["document"]
+  },
+  "better-comments.tags": [
+    {
+      "tag": "TODO",
+      "color": "#FFB86C"
+    },
+    {
+      "tag": "FIXME",
+      "color": "#FF5555"
+    },
+    {
+      "tag": "NOTE",
+      "color": "#8BE9FD"
+    }
+  ],
+  "biome.lsp.bin": {
+    "darwin-arm64": "./node_modules/@biomejs/cli-darwin-arm64/bin",
+    "win32-x64": "./node_modules/@biomejs/cli-win32-x64/bin"
+  },
+  "editor.unicodeHighlight.allowedCharacters": {
+    "а": true,
+    "е": true
+  },
+  "editor.codeActionsOnSave": {
+    "source.fixAll": "explicit",
+    "source.fixAll.biome": "explicit"
+  },
+  "terminal.integrated.profiles.windows": {
+    "C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe (migrated)": {
+      "path": "C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+      "args": []
+    }
+  },
+  "biome.enabled": true,
+  "debug.console.fontSize": 16,
+  "diffEditor.ignoreTrimWhitespace": false,
+  "diffEditor.maxComputationTime": 0,
+  "editor.defaultFormatter": "biomejs.biome",
+  "editor.foldingMaximumRegions": 65000,
+  "editor.fontLigatures": false,
+  "editor.fontSize": 16,
+  "editor.formatOnSave": true,
+  "editor.formatOnSaveMode": "modificationsIfAvailable",
+  "editor.rulers": [],
+  "editor.suggestSelection": "first",
+  "editor.tabSize": 2,
+  "editor.unicodeHighlight.ambiguousCharacters": false,
+  "explorer.confirmDelete": false,
+  "files.autoSave": "afterDelay",
+  "files.autoSaveDelay": 1500,
+  "files.defaultLanguage": "typescriptreact",
+  "files.eol": "\n",
+  "files.insertFinalNewline": true,
+  "git.autofetch": true,
+  "git.confirmSync": false,
+  "git.enableSmartCommit": true,
+  "git.ignoreRebaseWarning": true,
+  "javascript.updateImportsOnFileMove.enabled": "always",
+  "js/ts.implicitProjectConfig.experimentalDecorators": true,
+  "json.maxItemsComputed": 1e21,
+  "markdown.preview.fontSize": 16,
+  "explorer.copyRelativePathSeparator": "/",
+  "security.workspace.trust.untrustedFiles": "open",
+  "stylelint.fixOnSave": true,
+  "stylelint.validate": ["css"],
+  "terminal.integrated.defaultProfile.windows": "Git Bash",
+  "terminal.integrated.fontSize": 16,
+  "todo-tree.general.tags": ["TODO", "FIXME", "BUG"],
+  "typescript.updateImportsOnFileMove.enabled": "always",
+  "workbench.colorCustomizations": {},
+  "workbench.colorTheme": "Ayu Mirage Bordered",
+  "workbench.iconTheme": "vscode-great-icons",
+  "workbench.settings.useSplitJSON": true,
+  "git.mergeEditor": true,
+  "[css]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  }
+}

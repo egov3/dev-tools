@@ -1,0 +1,42 @@
+{
+  "name": "@egov3/codecheck",
+  "version": "1.0.0",
+  "description": "Shared code quality tools for TypeScript projects",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "codecheck": "./dist/bin/codecheck.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write ."
+  },
+  "keywords": [
+    "typescript",
+    "code-quality",
+    "ts-prune",
+    "dead-code",
+    "lint"
+  ],
+  "author": "Zhassulan Baigozha",
+  "license": "ISC",
+  "dependencies": {
+    "glob": "^11.0.3",
+    "purgecss": "^7.0.2",
+    "ts-prune": "^0.10.3",
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.0",
+    "@types/node": "^25.9.1",
+    "typescript": "^5.9.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,65 @@
+name: Publish to npm
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      packages: write
+      actions: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org/"
+
+      - name: Install dependencies
+        run: yarn install
+
+      - name: Build project
+        run: yarn build
+
+      - name: Check and Increment version
+        id: version
+        run: |
+          PREVIOUS_VERSION=$(jq -r '.version' package.json)
+          yarn version --patch --no-git-tag-version
+          NEW_VERSION=$(jq -r '.version' package.json)
+
+          if [ "$PREVIOUS_VERSION" = "$NEW_VERSION" ]; then
+            echo "Version unchanged: $NEW_VERSION"
+            echo "should_publish=false" >> $GITHUB_ENV
+          else
+            echo "Version updated from $PREVIOUS_VERSION to $NEW_VERSION"
+            echo "should_publish=true" >> $GITHUB_ENV
+          fi
+
+      - name: Commit updated package.json
+        if: env.should_publish == 'true'
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch --prune
+          git stash --include-untracked
+          git pull --rebase || git rebase --abort
+          git stash pop || true
+          git add package.json
+          git commit -m "ci: bump version to $(jq -r '.version' package.json)"
+          git push --force-with-lease
+
+      - name: Publish to npm
+        if: env.should_publish == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GRANULAR_TOKEN_NEW }}
+        run: yarn publish --non-interactive --access public
