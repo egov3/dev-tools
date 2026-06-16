@@ -26,8 +26,11 @@
     }
   },
   "dumpFiles": {
-    "files": [],
-    "folders": ["scripts"],
+    "files": [
+      "src/services/fetch/services/fetchSigningData.tsx",
+      "src/utils/rest/requestHelper.tsx"
+    ],
+    "folders": ["src/utils/rest"],
     "excludeFolders": ["node_modules", ".git"]
   }
 }

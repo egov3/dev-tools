@@ -1,0 +1,43 @@
+{
+  "commentsLint": {
+    "excludeFiles": [
+      "next-env.d.ts"
+    ]
+  },
+  "deadCode": {
+    "ignorePatterns": {
+      "src": [
+        "\\.test\\.",
+        "__tests__/",
+        "__mocks__/",
+        "src/middleware.ts",
+        "constants/serviceDetails"
+      ],
+      "tests": [
+        "src/"
+      ],
+      "common": [
+        "^\\.next/",
+        "\\.d\\.ts$",
+        "/store/",
+        "default",
+        "layout\\.tsx",
+        "page\\.tsx",
+        "manifest\\.tsx",
+        "robots\\.tsx",
+        "index\\.ts$"
+      ]
+    }
+  },
+  "dumpFiles": {
+    "files": ["package.json", "Readme.md", "tsconfig.json"],
+    "folders": [
+      "src",
+      "templates"
+    ],
+    "excludeFolders": [
+      "node_modules",
+      ".git"
+    ]
+  }
+}

@@ -1,0 +1,776 @@
+===== package.json =====
+{
+  "name": "@egov3/codecheck",
+  "version": "1.0.2",
+  "description": "Shared code quality tools for TypeScript projects",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "codecheck": "./dist/bin/codecheck.js"
+  },
+  "files": [
+    "dist",
+    "templates"
+  ],
+  "scripts": {
+    "dump:files": "ts-node scripts/dump-files.ts",
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write ."
+  },
+  "keywords": [
+    "typescript",
+    "code-quality",
+    "ts-prune",
+    "dead-code",
+    "lint"
+  ],
+  "author": "Zhassulan Baigozha",
+  "license": "ISC",
+  "dependencies": {
+    "glob": "^11.0.3",
+    "purgecss": "^7.0.2",
+    "ts-prune": "^0.10.3",
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.0",
+    "@types/node": "^25.9.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
+
+
+===== Readme.md =====
+# планируемая структура 
+src/
+├── bin/
+│   └── codecheck.ts
+├── commands/
+│   ├── dead-code.ts
+│   ├── comments-lint.ts
+│   ├── dump-files.ts
+│   └── dead-css.ts
+├── utils/
+│   ├── config.ts
+│   └── logger.ts
+└── index.ts
+
+
+# Цель 
+1. В package.json пакета:
+{
+  "bin": {
+    "codecheck": "./bin/codecheck.js"
+  }
+}
+2.
+После установки:
+
+yarn add -D @egov3/codecheck
+3. можно запускать:
+
+npx codecheck dead-code
+npx codecheck comments-lint
+npx codecheck dump-files
+npx codecheck dead-css
+
+
+
+или через package.json проекта:
+
+{
+  "scripts": {
+    "dead-code": "codecheck dead-code",
+    "comments:lint": "codecheck comments-lint",
+    "dump:files": "codecheck dump-files",
+    "dead-css": "codecheck dead-css"
+  }
+}
+
+
+
+===== tsconfig.json =====
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+
+    "types": ["node"],
+
+    "outDir": "./dist",
+    "rootDir": "./src",
+
+    "declaration": true,
+    "declarationMap": true,
+
+    "sourceMap": true,
+
+    "strict": true,
+    "noImplicitAny": true,
+
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+
+    "resolveJsonModule": true,
+
+    "skipLibCheck": true,
+
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["dist", "node_modules"]
+}
+
+
+===== src/bin/codecheck.ts =====
+#!/usr/bin/env node
+
+import { runCommentsLint } from "../commands/comments-lint.js";
+import { runDeadCode } from "../commands/dead-code.js";
+
+// Module '"../commands/dead-css.js"' has no exported member 'runDeadCss'.
+// import { runDeadCss } from "../commands/dead-css.js";
+// Module '"../commands/dump-files.js"' has no exported member 'runDumpFiles'.
+// import { runDumpFiles } from "../commands/dump-files.js";
+
+async function main() {
+	const command = process.argv[2];
+
+	try {
+		switch (command) {
+			case "comments-lint": {
+				const res = await runCommentsLint();
+				if (res.length) {
+					console.error("❌ Forbidden comments:");
+					console.error(res.join("\n"));
+					process.exit(1);
+				}
+				break;
+			}
+
+			case "dead-code":
+				runDeadCode();
+				break;
+
+			// case "dump-files":
+			// 	await runDumpFiles();
+			// 	break;
+
+			// case "dead-css":
+			// 	await runDeadCss();
+			// 	break;
+
+			default:
+				console.log(`
+Usage:
+
+  codecheck comments-lint
+  codecheck dead-code
+  codecheck dump-files
+  codecheck dead-css
+`);
+				process.exit(1);
+		}
+	} catch (err) {
+		console.error("❌ Error:", err);
+		process.exit(1);
+	}
+}
+
+main();
+
+
+===== src/commands/comments-lint.ts =====
+// src/commands/comments-lint.ts
+import { execSync } from "node:child_process";
+import fs from "node:fs";
+
+export interface CommentsLintOptions {
+	configPath?: string;
+}
+
+export function runCommentsLint(options: CommentsLintOptions = {}) {
+	const CONFIG_FILE = options.configPath ?? "scripts/.codecheck.config.json";
+
+	let commentExcludes: string[] = [];
+
+	if (fs.existsSync(CONFIG_FILE)) {
+		const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8"));
+		commentExcludes = cfg.commentsLint?.excludeFiles ?? [];
+	}
+
+	let files: string[] = [];
+
+	try {
+		const staged = execSync("git diff --cached --name-only --diff-filter=d", {
+			encoding: "utf-8",
+		})
+			.split("\n")
+			.filter(Boolean)
+			.filter((f) => /\.(ts|tsx|js|jsx|css|scss)$/.test(f));
+
+		if (commentExcludes.length) {
+			const excludeRegex = new RegExp(commentExcludes.join("|"));
+			files = staged.filter((f) => !excludeRegex.test(f));
+		} else {
+			files = staged;
+		}
+	} catch (e) {
+		throw new Error(`Failed to get staged files: ${e}`);
+	}
+
+	if (!files.length) return [];
+
+	const forbiddenComments: string[] = [];
+
+	for (const file of files) {
+		if (!fs.existsSync(file)) continue;
+
+		const content = fs.readFileSync(file, "utf-8").split("\n");
+
+		content.forEach((line, idx) => {
+			const match = /^\s*(\/\/|\/\*)/.exec(line);
+
+			if (match && !/TODO|FIXME|NOTE|HACK|XXX/i.test(line)) {
+				forbiddenComments.push(`${file}:${idx + 1}: ${line}`);
+			}
+		});
+	}
+
+	return forbiddenComments;
+}
+
+
+===== src/commands/dead-code.ts =====
+// src/commands/dead-code.ts
+import { execSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
+
+type ExecError = Error & {
+	stdout?: Buffer | string;
+};
+
+interface IgnorePatterns {
+	src: string[];
+	tests: string[];
+	common: string[];
+}
+
+interface Config {
+	ignorePatterns?: IgnorePatterns;
+}
+
+interface DeadCodeResult {
+	defaultLines: string[];
+	otherLines: string[];
+}
+
+function isExecError(error: unknown): error is ExecError {
+	return typeof error === "object" && error !== null && "stdout" in error;
+}
+
+function readConfig(): Config {
+	// FIX: читаем из root проекта, а не из dist/scripts
+	const configPath = path.join(process.cwd(), "scripts/.codecheck.config.json");
+
+	try {
+		const raw = fs.readFileSync(configPath, "utf-8");
+		const parsed = JSON.parse(raw);
+		return parsed.deadCode ?? {};
+	} catch {
+		return {};
+	}
+}
+
+function getDefaultIgnorePatterns(): IgnorePatterns {
+	return { src: [], tests: [], common: [] };
+}
+
+function runTsPrune(): string {
+	try {
+		return execSync("ts-prune -p tsconfig.json", {
+			encoding: "utf8",
+			stdio: ["pipe", "pipe", "ignore"],
+		});
+	} catch (error: unknown) {
+		if (isExecError(error)) {
+			return error.stdout?.toString() ?? "";
+		}
+		throw error;
+	}
+}
+
+function runInternal(type: "src" | "tests"): DeadCodeResult {
+	const config = readConfig();
+	const ignorePatterns = config.ignorePatterns ?? getDefaultIgnorePatterns();
+
+	const patterns: string[] = [...ignorePatterns.common];
+
+	if (type === "src") patterns.push(...ignorePatterns.src);
+	if (type === "tests") patterns.push(...ignorePatterns.tests);
+
+	const output = runTsPrune();
+
+	const lines = output
+		.split("\n")
+		.filter(Boolean)
+		.filter((line) => {
+			const normalized = line.replaceAll("\\", "/");
+
+			return !patterns.some((pattern) => {
+				try {
+					return new RegExp(pattern).test(normalized);
+				} catch {
+					return false;
+				}
+			});
+		});
+
+	const defaultLines: string[] = [];
+	const otherLines: string[] = [];
+
+	for (const line of lines) {
+		if (line.includes(" - default")) {
+			defaultLines.push(line);
+		} else {
+			otherLines.push(line);
+		}
+	}
+
+	return { defaultLines, otherLines };
+}
+
+function printResult(result: DeadCodeResult): void {
+	if (result.defaultLines.length) {
+		console.log("Default exports:");
+		console.log(result.defaultLines.join("\n"));
+	}
+
+	if (result.otherLines.length) {
+		console.log(result.otherLines.join("\n"));
+	}
+}
+
+/**
+ * PUBLIC API (используется CLI и может использоваться как npm package)
+ */
+export function runDeadCode(type: "src" | "tests" | "all" = "all"): void {
+	const results: DeadCodeResult[] = [];
+
+	if (type === "all") {
+		results.push(runInternal("src"), runInternal("tests"));
+	} else {
+		results.push(runInternal(type));
+	}
+
+	results.forEach(printResult);
+
+	const total = results.reduce((sum, r) => sum + r.otherLines.length, 0);
+
+	if (total > 0) {
+		throw new Error(`Найдено ${total} неиспользуемых экспортов`);
+	}
+}
+
+
+===== src/commands/dead-css.ts =====
+#!/usr/bin/env ts-node
+
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { glob } from "glob";
+import { PurgeCSS } from "purgecss";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const projectRoot = join(__dirname, "..");
+
+// -------------------------
+// FILES
+// -------------------------
+
+const cssFiles = await glob("src/**/*.css", {
+	cwd: projectRoot,
+	absolute: true,
+});
+
+const contentPatterns = [
+	"src/**/*.{ts,tsx,js,jsx}",
+	"app/**/*.{ts,tsx,js,jsx}",
+	"!src/**/*.test.{ts,tsx}",
+	"!**/node_modules/**",
+	"!**/.next/**",
+	"!**/coverage/**",
+	"!**/__tests__/**",
+];
+
+// -------------------------
+// CACHE
+// -------------------------
+
+const fileCache = new Map<string, string>();
+const contentFilePaths: string[] = [];
+
+for (const pattern of contentPatterns) {
+	const files = await glob(pattern, {
+		cwd: projectRoot,
+		absolute: true,
+		ignore: ["**/node_modules/**", "**/.next/**", "**/coverage/**"],
+	});
+
+	contentFilePaths.push(...files);
+}
+
+for (const file of contentFilePaths) {
+	try {
+		fileCache.set(file, readFileSync(file, "utf-8"));
+	} catch {}
+}
+
+const allContentText = Array.from(fileCache.values()).join("\n");
+
+// -------------------------
+// USED CLASSES
+// -------------------------
+
+function extractUsedClasses(content: string): Set<string> {
+	const used = new Set<string>();
+
+	const classNameRegex = /className\s*=\s*["'`]([^"'`]+)["'`]/g;
+
+	for (const match of content.matchAll(classNameRegex)) {
+		for (const c of match[1].split(/\s+/)) {
+			if (c) used.add(c);
+		}
+	}
+
+	for (const match of content.matchAll(/styles\.(\w+)/g)) {
+		used.add(match[1]);
+	}
+
+	for (const match of content.matchAll(/(?:clsx|cn)\(([^)]*)\)/g)) {
+		const inner = match[1];
+		const strings = inner.match(/["'`]([^"'`]+)["'`]/g);
+
+		if (strings) {
+			for (const s of strings) {
+				used.add(s.replace(/["'`]/g, ""));
+			}
+		}
+	}
+
+	return used;
+}
+
+const usedClasses = extractUsedClasses(allContentText);
+
+// -------------------------
+// CSS PARSER
+// -------------------------
+
+function extractClassesFromCSS(css: string): string[] {
+	const set = new Set<string>();
+
+	const cleaned = css
+		.replace(/\/\*[\s\S]*?\*\//g, "")
+		.replace(/url\([^)]*\)/g, "");
+
+	const regex = /\.([a-zA-Z0-9_-]+)/g;
+
+	let match: RegExpExecArray | null;
+
+	while (true) {
+		match = regex.exec(cleaned);
+		if (!match) break; // <-- FIX: no assignment in expression warning
+
+		const cls = match[1];
+
+		if (
+			cls.length >= 2 &&
+			!["svg", "png", "jpg", "jpeg", "woff", "woff2"].includes(cls.toLowerCase())
+		) {
+			set.add(cls);
+		}
+	}
+
+	return [...set];
+}
+
+// -------------------------
+// ANALYSIS
+// -------------------------
+
+interface DeadCssItem {
+	file: string;
+	totalClasses: number;
+	deadClasses: number;
+	classes: string[];
+}
+
+const report: DeadCssItem[] = [];
+
+let totalClasses = 0;
+let totalDead = 0;
+
+for (const cssFile of cssFiles) {
+	const cssContent = readFileSync(cssFile, "utf-8");
+	const classes = extractClassesFromCSS(cssContent);
+
+	totalClasses += classes.length;
+
+	const deadClasses = classes.filter((cls) => {
+		const base = cls.includes("__")
+			? cls.split("__")[0].split("_").pop() || cls
+			: cls;
+
+		return !usedClasses.has(cls) && !usedClasses.has(base);
+	});
+
+	totalDead += deadClasses.length;
+
+	if (deadClasses.length > 0) {
+		report.push({
+			file: cssFile.replace(projectRoot, ""),
+			totalClasses: classes.length,
+			deadClasses: deadClasses.length,
+			classes: deadClasses,
+		});
+	}
+}
+
+// -------------------------
+// PURGECSS
+// -------------------------
+
+const purge = await new PurgeCSS().purge({
+	content: contentFilePaths,
+	css: cssFiles,
+	safelist: {
+		standard: [/^html$/, /^body$/, /^:root$/],
+		deep: [/__.+/],
+	},
+});
+
+let originalSize = 0;
+let afterSize = 0;
+
+for (let i = 0; i < cssFiles.length; i++) {
+	const original = readFileSync(cssFiles[i], "utf-8");
+	const purged = purge[i]?.css ?? "";
+
+	originalSize += original.length;
+	afterSize += purged.length;
+}
+
+// -------------------------
+// OUTPUT
+// -------------------------
+
+console.log("\n==============================");
+console.log("📊 CSS DEAD CODE ANALYSIS");
+console.log("==============================");
+
+console.log(`📁 Files: ${cssFiles.length}`);
+console.log(`🎯 Classes: ${totalClasses}`);
+console.log(`🗑️ Dead: ${totalDead}`);
+console.log(
+	`📉 %: ${
+		totalClasses ? ((totalDead / totalClasses) * 100).toFixed(2) : 0
+	}%\n`,
+);
+
+console.log("🔧 PURGECSS");
+console.log(`Original: ${(originalSize / 1024).toFixed(2)} KB`);
+console.log(`After: ${(afterSize / 1024).toFixed(2)} KB`);
+console.log(`Saved: ${((originalSize - afterSize) / 1024).toFixed(2)} KB\n`);
+
+if (report.length) {
+	console.log("🗑️ DEAD CLASSES:");
+
+	for (const item of report) {
+		console.log(`\n📄 ${item.file}`);
+		console.log(`Total: ${item.totalClasses}`);
+		console.log(`Dead: ${item.deadClasses}`);
+
+		for (const c of item.classes) {
+			console.log(`  - .${c}`);
+		}
+	}
+}
+
+console.log("\n✅ Done \n");
+
+
+===== src/commands/dump-files.ts =====
+#!/usr/bin/env ts-node
+// src/commands/dump-files.ts
+import { execSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
+
+interface ICodecheckConfig {
+  dumpFiles: {
+    files: string[];
+    folders: string[];
+    excludeFolders: string[];
+  };
+}
+
+const DUMPS_DIR = "dump";
+if (!fs.existsSync(DUMPS_DIR)) fs.mkdirSync(DUMPS_DIR);
+
+const DATE = new Date().toISOString().slice(0, 10).replaceAll("-", ".");
+const OUT = path.join(DUMPS_DIR, `${DATE}-dump-files.txt`);
+
+fs.writeFileSync(OUT, "");
+
+const CONFIG_FILE = "scripts/.codecheck.config.json";
+
+// ------------------------
+// FILE WRITER
+// ------------------------
+
+function dumpFile(file: string) {
+  fs.appendFileSync(OUT, `===== ${file} =====\n`);
+
+  try {
+    const content = fs.readFileSync(file, "utf-8");
+    fs.appendFileSync(OUT, `${content}\n\n`);
+  } catch {
+    fs.appendFileSync(OUT, `⚠️ Не удалось прочитать файл: ${file}\n\n`);
+  }
+}
+
+// ------------------------
+// DIR WALK (FIXED)
+// ------------------------
+
+function dumpDir(dir: string, excludeFolders: string[]) {
+  const excludeArgs = excludeFolders
+    .map((f) => `-name "${f}" -prune -o`)
+    .join(" ");
+
+  const cmd = `find "${dir}" ${excludeArgs} -type f -print`;
+
+  const files = execSync(cmd, { encoding: "utf-8" })
+    .split("\n")
+    .filter(Boolean);
+
+  for (const file of files) {
+    dumpFile(file);
+  }
+}
+
+// ------------------------
+// CONFIG
+// ------------------------
+
+if (!fs.existsSync(CONFIG_FILE)) {
+  console.error(`❌ Config not found: ${CONFIG_FILE}`);
+  process.exit(1);
+}
+
+let configJson: ICodecheckConfig;
+
+try {
+  configJson = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8"));
+} catch (e) {
+  console.error("❌ Invalid JSON config", e);
+  process.exit(1);
+}
+
+const files = configJson.dumpFiles?.files ?? [];
+const folders = configJson.dumpFiles?.folders ?? [];
+const excludeFolders = configJson.dumpFiles?.excludeFolders ?? [
+  "node_modules",
+  ".git",
+];
+
+// ------------------------
+// LOG CONFIG
+// ------------------------
+
+console.log(`Files: ${files.join(", ") || "none"}`);
+console.log(`Folders: ${folders.join(", ") || "none"}`);
+console.log(`Excluded: ${excludeFolders.join(", ")}`);
+
+// ------------------------
+// FILES
+// ------------------------
+
+for (const f of files) {
+  if (fs.existsSync(f) && fs.statSync(f).isFile()) {
+    dumpFile(f);
+  } else {
+    console.warn(`⚠️ File not found: ${f}`);
+  }
+}
+
+// ------------------------
+// FOLDERS
+// ------------------------
+
+for (const d of folders) {
+  if (fs.existsSync(d) && fs.statSync(d).isDirectory()) {
+    dumpDir(d, excludeFolders);
+  } else {
+    console.warn(`⚠️ Folder not found: ${d}`);
+  }
+}
+
+console.log(`✔ dumped → ${OUT}`);
+
+
+===== src/index.ts =====
+export { runCommentsLint } from "./commands/comments-lint.js";
+export { runDeadCode } from "./commands/dead-code.js";
+
+
+===== templates/.codecheck.config.example.json =====
+{
+  "commentsLint": {
+    "excludeFiles": ["next-env.d.ts"]
+  },
+  "deadCode": {
+    "ignorePatterns": {
+      "src": [
+        "\\.test\\.",
+        "__tests__/",
+        "__mocks__/",
+        "src/middleware.ts",
+        "constants/serviceDetails"
+      ],
+      "tests": ["src/"],
+      "common": [
+        "^\\.next/",
+        "\\.d\\.ts$",
+        "/store/",
+        "default",
+        "layout\\.tsx",
+        "page\\.tsx",
+        "manifest\\.tsx",
+        "robots\\.tsx",
+        "index\\.ts$"
+      ]
+    }
+  },
+  "dumpFiles": {
+    "files": [
+      "src/services/fetch/services/fetchSigningData.tsx",
+      "src/utils/rest/requestHelper.tsx"
+    ],
+    "folders": ["src/utils/rest"],
+    "excludeFolders": ["node_modules", ".git"]
+  }
+}
+
+
