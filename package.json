@@ -1,6 +1,6 @@
 {
   "name": "@egov3/codecheck",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Shared code quality tools for TypeScript projects",
   "type": "module",
   "main": "dist/index.js",
